@@ -1,7 +1,11 @@
-import java.io.*;
-import java.net.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
 
 
 public class Server {
@@ -137,8 +141,89 @@ public class Server {
 		String username;
 		ChatMessage cm;
 		String date;
-	}
+		
+		ClientThread(Socket socket) {
+			id = ++uniqueId;
+			this.socket = socket;
+			System.out.println("Thread trying to create Object Input/Output Streams");
+			try {
+				sOutput = new ObjectOutputStream(socket.getOutputStream());
+				sInput = new ObjectInputStream(socket.getInputStream());
+				username = (String) sInput.readObject();
+				display(username + " just connected");
+			} catch(IOException e) {
+				display("Exception creating new Input/Output Streams: " + e);
+				return;
+			}
+			date = new Date().toString() + "\n";
+		}
+		public void run(){
+			boolean keepGoing = true;
+			while(keepGoing) {
+				try {
+					cm = (ChatMessage) sInput.readObject();
+				}
+				catch(ClassNotFoundException e2) {
+					break;
+				}
+				
+				String message = cm.getMessage();
+				
+				switch(cm.getType()){
+				
+				case ChatMessage.MESSAGE:
+					broadcast(username + ": " + message);
+					break;
+				case ChatMessage.LOGOUT:
+					display(username + " disconnected with a LOGOUT message.");
+					keepGoing = false;
+					break;
+				case ChatMessage.WHOISIN:
+					writeMsg("List of the users connected at " + sdf.format(new Date()) + "\n");
+					for (int i = 0; i < al.size(); ++i){
+						ClientThread ct = al.get(i);
+						writeMsg((i+1) + ") " + ct.username + " since " + ct.date);
+					}
+					break;
+				
+				}
+				
+			}
+			remove(id);
+			close();
+		}
+		private void close() {
+			try {
+				if (sOutput != null) sOutput.close();
+			}
+			catch(Exception e) {};
+			try {
+				if (sInput != null) sInput.close();
+			}
+			catch(Exception e) {};
+			try {
+				if (socket != null) socket.close();
+			}
+			catch(Exception e){};
+		}
+		
+		private boolean writeMsg(String msg){
+			if(!socket.isConnected()) {
+				close();
+				return false;
+			}
+			try {
+				sOutput.writeObject(msg);
+			}
+			catch(IOException e) {
+				display("Error sending message to " + username);
+				display(e.toString());
+			}
+			return true;
+		}
 		
 	}
+		
+}
 	
 }
